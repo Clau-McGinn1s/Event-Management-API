@@ -7,16 +7,30 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\AttendeeResource;
 use App\Models\Attendee;
 use Illuminate\Http\Request;
+use App\Http\Traits\CanLoadRelationships;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
-class AttendeeController extends Controller
+use Illuminate\Routing\Controller as BaseController;
+
+
+class AttendeeController extends BaseController
 {
-    /**
-     * Display a listing of the resource.
-     */
+    use AuthorizesRequests;
+    use CanLoadRelationships;
+    private array $relations = ['user', 'event'];
+
+    public function __construct()
+    {
+        $this->authorizeResource(Attendee::class, 'attendee');
+    }
+
+
     public function index(Event $event)
     {
-        $attendees = $event->attendees()->latest();
-        return AttendeeResource::collection($attendees->paginate());
+        //Gate::authorize('viewAny', Attendee::class);
+
+        $attendees = $this->loadRelationships($event->attendees()->getQuery());
+        return AttendeeResource::collection($attendees->get()/*paginate()*/);
     }
 
     /**
@@ -24,12 +38,13 @@ class AttendeeController extends Controller
      */
     public function store(Request $request, Event $event)
     {
+        //Gate::authorize('create', $event);
+
         $data = [
-            'user_id' => 1, //arbitrary atm
+            'user_id' => $request->user()->id, 
         ];
 
-        $attendee = $event->attendees()->create($data);
-
+        $attendee = $this->loadRelationships($event->attendees()->create($data));
         return new AttendeeResource($attendee);
         
     }
@@ -39,7 +54,9 @@ class AttendeeController extends Controller
      */
     public function show(string $event, Attendee $attendee)
     {
-        return new AttendeeResource($attendee);
+        //Gate::authorize('view', $attendee);
+
+        return new AttendeeResource($this->loadRelationships($attendee));
     }
 
     /**
@@ -47,8 +64,9 @@ class AttendeeController extends Controller
      */
     public function destroy(string $event, Attendee $attendee)
     {
-        $attendee->delete();
+        //Gate::authorize('delete', $attendee);
 
+        $attendee->delete();
         return response()->json(status:204);
     }
 }
